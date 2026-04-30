@@ -1,7 +1,7 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "main": ".open-next/worker.js",
-  "name": "soccer-scrapper",
+  "name": "soccer-api",
   "compatibility_date": "2026-04-30",
   "compatibility_flags": [
     "nodejs_compat",
@@ -14,7 +14,7 @@
   "services": [
     {
       "binding": "WORKER_SELF_REFERENCE",
-      "service": "soccer-scrapper"
+      "service": "soccer-api"
     }
   ],
   "observability": {
