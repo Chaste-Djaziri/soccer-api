@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { getProxiedHlsUrl } from "@/lib/hlsProxy";
 import { scrapeSoccerTvHdStream } from "@/lib/soccerTvHd";
 import { VideoJsPlayer } from "./VideoJsPlayer";
 
@@ -16,7 +17,7 @@ export default async function WatchPage({ params }: PageProps) {
   const primary = data.primary;
   const playerSrc =
     primary?.type === "hls"
-      ? `/api/hls?url=${encodeURIComponent(primary.url)}`
+      ? getProxiedHlsUrl(primary.url)
       : primary?.url;
 
   return (
