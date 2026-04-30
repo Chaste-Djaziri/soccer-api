@@ -1,4 +1,3 @@
-const APPROVED_REFERER = "https://www.soccertvhd.com/";
 const APPROVED_ORIGIN = "https://www.soccertvhd.com";
 const STREAM_SOURCES = {
   bustrr: "bustrr.cachefly.net",
@@ -6,6 +5,12 @@ const STREAM_SOURCES = {
   remleg: "remleg.cachefly.net",
   serspurgg: "serspurgg.cachefly.net",
 } as const;
+const STREAM_REFERERS = {
+  bustrr: "https://www.soccertvhd.com/streameast-stream-east-live-streaming/",
+  laliscorr: "https://www.soccertvhd.com/score808-score808-live/",
+  remleg: "https://www.soccertvhd.com/hesgoal-hes-goal-live-streaming/",
+  serspurgg: "https://www.soccertvhd.com/sportsurge-sport-surge-live-streaming/",
+} satisfies Record<StreamSource, string>;
 
 export type StreamSource = keyof typeof STREAM_SOURCES;
 
@@ -64,10 +69,7 @@ export async function proxyHlsRequest(request: Request, target: string) {
     );
   }
 
-  const upstream = await fetch(streamUrl, {
-    cache: "no-store",
-    headers: upstreamHeaders(request),
-  });
+  const upstream = await fetchUpstream(request, streamUrl);
 
   const contentType = upstream.headers.get("content-type") ?? "";
   const playlist = isPlaylist(streamUrl, contentType);
@@ -126,15 +128,54 @@ function isStreamSource(source: string): source is StreamSource {
   return source in STREAM_SOURCES;
 }
 
-function upstreamHeaders(request: Request) {
+async function fetchUpstream(request: Request, streamUrl: URL) {
+  const attempts: Array<"origin-and-referer" | "referer-only" | "minimal"> = [
+    "origin-and-referer",
+    "referer-only",
+    "minimal",
+  ];
+
+  let response: Response | undefined;
+
+  for (const mode of attempts) {
+    response = await fetch(streamUrl, {
+      cache: "no-store",
+      headers: upstreamHeaders(request, streamUrl, mode),
+    });
+
+    if (response.ok || response.status !== 403) {
+      return response;
+    }
+  }
+
+  if (!response) {
+    throw new Error("Unable to fetch upstream stream.");
+  }
+
+  return response;
+}
+
+function upstreamHeaders(
+  request: Request,
+  streamUrl: URL,
+  mode: "origin-and-referer" | "referer-only" | "minimal",
+) {
+  const source = getStreamSource(streamUrl);
   const headers = new Headers({
     accept:
       request.headers.get("accept") ??
       "application/vnd.apple.mpegurl,application/x-mpegURL,video/mp2t,*/*",
-    origin: APPROVED_ORIGIN,
-    referer: APPROVED_REFERER,
-    "user-agent": "Mozilla/5.0 soccer-scrapper",
+    "user-agent":
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
   });
+
+  if (mode === "origin-and-referer") {
+    headers.set("origin", APPROVED_ORIGIN);
+  }
+
+  if (mode !== "minimal") {
+    headers.set("referer", source ? STREAM_REFERERS[source] : APPROVED_ORIGIN);
+  }
 
   const range = request.headers.get("range");
   if (range) {
