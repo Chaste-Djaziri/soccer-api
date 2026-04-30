@@ -134,17 +134,20 @@ async function fetchUpstream(request: Request, streamUrl: URL) {
     "referer-only",
     "minimal",
   ];
+  const urls = getUpstreamUrlCandidates(streamUrl);
 
   let response: Response | undefined;
 
-  for (const mode of attempts) {
-    response = await fetch(streamUrl, {
-      cache: "no-store",
-      headers: upstreamHeaders(request, streamUrl, mode),
-    });
+  for (const url of urls) {
+    for (const mode of attempts) {
+      response = await fetch(url, {
+        cache: "no-store",
+        headers: upstreamHeaders(request, streamUrl, mode),
+      });
 
-    if (response.ok || response.status !== 403) {
-      return response;
+      if (await isUsableUpstreamResponse(response)) {
+        return response;
+      }
     }
   }
 
@@ -153,6 +156,26 @@ async function fetchUpstream(request: Request, streamUrl: URL) {
   }
 
   return response;
+}
+
+function getUpstreamUrlCandidates(streamUrl: URL) {
+  const urls = [streamUrl];
+
+  if (streamUrl.protocol === "https:") {
+    const httpUrl = new URL(streamUrl);
+    httpUrl.protocol = "http:";
+    urls.push(httpUrl);
+  }
+
+  return urls;
+}
+
+async function isUsableUpstreamResponse(response: Response) {
+  if (response.ok) {
+    return true;
+  }
+
+  return response.status !== 403;
 }
 
 function upstreamHeaders(
@@ -165,8 +188,14 @@ function upstreamHeaders(
     accept:
       request.headers.get("accept") ??
       "application/vnd.apple.mpegurl,application/x-mpegURL,video/mp2t,*/*",
+    "accept-language": "en-US,en;q=0.9",
+    priority: "u=1, i",
+    "sec-fetch-dest": "empty",
+    "sec-fetch-mode": "cors",
+    "sec-fetch-site": "cross-site",
     "user-agent":
       "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
+    "x-no-redirect": "1",
   });
 
   if (mode === "origin-and-referer") {
