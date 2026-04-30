@@ -1,6 +1,10 @@
 const APPROVED_REFERER = "https://www.soccertvhd.com/";
 const APPROVED_ORIGIN = "https://www.soccertvhd.com";
 const ALLOWED_STREAM_HOSTS = new Set(["remleg.cachefly.net"]);
+const ALLOWED_REQUEST_ORIGINS = new Set([
+  "https://www.soccertvhd.com",
+  "https://soccer-api.anime-proxy.workers.dev",
+]);
 
 export function getProxiedHlsUrl(target: string, requestUrl = "http://localhost") {
   const streamUrl = new URL(target);
@@ -24,14 +28,14 @@ export async function proxyHlsRequest(request: Request, target: string) {
   } catch {
     return Response.json(
       { error: "Invalid HLS target URL." },
-      { status: 400, headers: corsHeaders() },
+      { status: 400, headers: corsHeaders(request) },
     );
   }
 
   if (!isAllowedStreamUrl(streamUrl)) {
     return Response.json(
       { error: "This stream host is not approved for proxying." },
-      { status: 403, headers: corsHeaders() },
+      { status: 403, headers: corsHeaders(request) },
     );
   }
 
@@ -42,7 +46,7 @@ export async function proxyHlsRequest(request: Request, target: string) {
 
   const contentType = upstream.headers.get("content-type") ?? "";
   const playlist = isPlaylist(streamUrl, contentType);
-  const responseHeaders = proxyResponseHeaders(upstream.headers, {
+  const responseHeaders = proxyResponseHeaders(request, upstream.headers, {
     includeContentLength: !playlist,
   });
 
@@ -70,9 +74,13 @@ export async function proxyHlsRequest(request: Request, target: string) {
   });
 }
 
-export function corsHeaders() {
+export function corsHeaders(request?: Request) {
+  const origin = request?.headers.get("origin");
+  const allowedOrigin =
+    origin && ALLOWED_REQUEST_ORIGINS.has(origin) ? origin : APPROVED_ORIGIN;
+
   return new Headers({
-    "access-control-allow-origin": "*",
+    "access-control-allow-origin": allowedOrigin,
     "access-control-allow-methods": "GET,OPTIONS",
     "access-control-allow-headers": "Range,Accept,Content-Type",
     "access-control-expose-headers":
@@ -104,10 +112,11 @@ function upstreamHeaders(request: Request) {
 }
 
 function proxyResponseHeaders(
+  request: Request,
   upstreamHeaders: Headers,
   options: { includeContentLength: boolean },
 ) {
-  const headers = corsHeaders();
+  const headers = corsHeaders(request);
   const contentType = upstreamHeaders.get("content-type");
   const contentLength = upstreamHeaders.get("content-length");
   const acceptRanges = upstreamHeaders.get("accept-ranges");

@@ -8,10 +8,10 @@ type HlsPathContext = {
   }>;
 };
 
-export async function OPTIONS() {
+export async function OPTIONS(request: Request) {
   return new Response(null, {
     status: 204,
-    headers: corsHeaders(),
+    headers: corsHeaders(request),
   });
 }
 
@@ -22,7 +22,7 @@ export async function GET(request: Request, { params }: HlsPathContext) {
   if (source !== "remleg" || streamPath.length === 0) {
     return Response.json(
       { error: "Unknown HLS stream source." },
-      { status: 404, headers: corsHeaders() },
+      { status: 404, headers: corsHeaders(request) },
     );
   }
 
