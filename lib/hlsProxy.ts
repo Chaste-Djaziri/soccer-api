@@ -1,6 +1,20 @@
 const APPROVED_REFERER = "https://www.soccertvhd.com/";
 const APPROVED_ORIGIN = "https://www.soccertvhd.com";
-const ALLOWED_STREAM_HOSTS = new Set(["remleg.cachefly.net"]);
+const STREAM_SOURCES = {
+  bustrr: "bustrr.cachefly.net",
+  laliscorr: "laliscorr.cachefly.net",
+  remleg: "remleg.cachefly.net",
+  serspurgg: "serspurgg.cachefly.net",
+} as const;
+
+export type StreamSource = keyof typeof STREAM_SOURCES;
+
+const STREAM_SOURCE_BY_HOST = new Map<string, StreamSource>(
+  (Object.keys(STREAM_SOURCES) as StreamSource[]).map((source) => [
+    STREAM_SOURCES[source],
+    source,
+  ]),
+);
 const ALLOWED_REQUEST_ORIGINS = new Set([
   "https://www.soccertvhd.com",
   "https://soccer-api.anime-proxy.workers.dev",
@@ -8,17 +22,28 @@ const ALLOWED_REQUEST_ORIGINS = new Set([
 
 export function getProxiedHlsUrl(target: string, requestUrl = "http://localhost") {
   const streamUrl = new URL(target);
+  const source = getStreamSource(streamUrl);
 
-  if (!isAllowedStreamUrl(streamUrl)) {
+  if (!source) {
     return target;
   }
 
-  const url = new URL(
-    `/api/hls/remleg${streamUrl.pathname}`,
-    requestUrl,
-  );
+  const url = new URL(`/api/hls/${source}${streamUrl.pathname}`, requestUrl);
   url.search = streamUrl.search;
   return url.pathname + url.search;
+}
+
+export function getStreamTargetUrl(source: string, path: string[], search: string) {
+  if (!isStreamSource(source) || path.length === 0) {
+    return null;
+  }
+
+  const target = new URL(
+    `/${path.map(encodeURIComponent).join("/")}`,
+    `https://${STREAM_SOURCES[source]}`,
+  );
+  target.search = search;
+  return target;
 }
 
 export async function proxyHlsRequest(request: Request, target: string) {
@@ -90,7 +115,15 @@ export function corsHeaders(request?: Request) {
 }
 
 function isAllowedStreamUrl(url: URL) {
-  return url.protocol === "https:" && ALLOWED_STREAM_HOSTS.has(url.hostname);
+  return url.protocol === "https:" && Boolean(getStreamSource(url));
+}
+
+function getStreamSource(url: URL) {
+  return STREAM_SOURCE_BY_HOST.get(url.hostname) ?? null;
+}
+
+function isStreamSource(source: string): source is StreamSource {
+  return source in STREAM_SOURCES;
 }
 
 function upstreamHeaders(request: Request) {

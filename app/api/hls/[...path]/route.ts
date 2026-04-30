@@ -1,4 +1,8 @@
-import { corsHeaders, proxyHlsRequest } from "@/lib/hlsProxy";
+import {
+  corsHeaders,
+  getStreamTargetUrl,
+  proxyHlsRequest,
+} from "@/lib/hlsProxy";
 
 export const dynamic = "force-dynamic";
 
@@ -18,20 +22,15 @@ export async function OPTIONS(request: Request) {
 export async function GET(request: Request, { params }: HlsPathContext) {
   const { path } = await params;
   const [source, ...streamPath] = path;
+  const requestUrl = new URL(request.url);
+  const target = getStreamTargetUrl(source, streamPath, requestUrl.search);
 
-  if (source !== "remleg" || streamPath.length === 0) {
+  if (!target) {
     return Response.json(
       { error: "Unknown HLS stream source." },
       { status: 404, headers: corsHeaders(request) },
     );
   }
-
-  const requestUrl = new URL(request.url);
-  const target = new URL(
-    `/${streamPath.map(encodeURIComponent).join("/")}`,
-    "https://remleg.cachefly.net",
-  );
-  target.search = requestUrl.search;
 
   return proxyHlsRequest(request, target.toString());
 }
